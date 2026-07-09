@@ -126,7 +126,7 @@ def read_raw_export(path):
     df = pd.DataFrame(records, columns = ["StudentID", "Name", "DOB", "Year"] + raw_columns)
     return df, school, warnings
 
-# returns a integer year if cell plausibly holds one
+# returns an integer year if cell plausibly holds one
 def _as_year(value):
     try:
         year = int(float(str(value).strip()))
@@ -139,7 +139,7 @@ def _as_year(value):
     
 # SECTION 3 — CLEANING AND VALIDATION
 
-# normalize grades, drop dupicates
+# normalize grades, drop duplicates
 def clean(df, warnings):
     score_cols = [c for c in df.columns if c.endswith("_SS") or c.endswith("_PL")]
     for c in score_cols:
@@ -166,7 +166,7 @@ def clean(df, warnings):
     dupes = df.duplicated(["StudentID", "Year"], keep = "last")
     if dupes.any():
         warnings.append(f"Removed {int(dupes.sum())} duplicate student-year row(s) "
-                        f"(kept the last occurance of each).")
+                        f"(kept the last occurrence of each).")
         df = df[~dupes]
     
     return df.sort_values(["Name", "StudentID", "Year"]).reset_index(drop = True)
@@ -502,7 +502,7 @@ def _sheet_readme(wb, school, n_students, n_records, years):
         "for every year, color-shaded so growth (or stagnation) is visible at a "
         "glance.", False, 10),
         ("• Student Lookup — pick any student from the dropdown to see their complete "
-        "testing history on one screen", False, 10),
+        "testing history on one screen.", False, 10),
         ("", False, 10),
         ("BUILT-IN RULES", True, 11),
         ('• Grade "15" in the raw export means Kindergarten and displays as "K".',
@@ -577,7 +577,7 @@ def run_gui():
 
     paths = filedialog.askopenfilenames(
         title = "Select one or more raw ACCESS export files",
-        filetypes = [("Excel files", "*.xlt *xls *.xlsx"), ("All files", "*.*")])
+        filetypes = [("Excel files", "*.xlt *.xls *.xlsx"), ("All files", "*.*")])
     if not paths:
         return
     

@@ -11,8 +11,13 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.dimensions import ColumnDimension, RowDimension
 from openpyxl.formatting.rule import FormulaRule, ColorScaleRule
+from openpyxl.chart import BarChart, PieChart, Reference 
+from openpyxl.chart.label import DataLabelList
 from openpyxl.worksheet.datavalidation import DataValidation
+from datetime import datetime
+from openpyxl.chart.layout import Layout, ManualLayout
 
 # SECTION 1 — CONSTANTS
 
@@ -242,6 +247,7 @@ def build_workbook(df, school, out_path):
     list_last = _sheet_lists(wb, latest)
     _sheet_lookup(wb, years, list_last, key, dcol, wb["Lists"])
     _sheet_readme(wb, school, len(latest), n_data, years)
+    _sheet_summary(wb, roster)
     del wb["Sheet"]
     wb.save(out_path)
 
@@ -317,6 +323,7 @@ def _sheet_data(wb, df, data_last):
     ws.column_dimensions["X"].hidden = True
     _status_cf(ws, f"W2:W{data_last}", "$W2")
 
+"""
 def _sheet_roster(wb, roster, school, key, dcol):
     ws = wb.create_sheet("Current Roster")
     ws["A1"] = f"{school} — Current EL Roster (each student's most recent ACCESS test)"
@@ -340,36 +347,121 @@ def _sheet_roster(wb, roster, school, key, dcol):
     for i, (_, r) in enumerate(roster.iterrows()):
         row = first + i
         ws.cell(row = row, column = 1).value = str(r.StudentID)
-        ws.cell(row = row, column = 21).value = (
+        ws.cell(row = row, column = 22).value = (
             f'=IFERROR(MATCH($A{row}&"|"&_xlfn.MAXIFS({dcol("E")},{dcol("B")},$A{row}),'
             f'{key},0),"")'
         )
         for col, letter in [(2, "C"), (3, "D"), (4, "F"), (5, "E")]:
-            ws.cell(row = row, column = col).value = f"=INDEX({dcol(letter)},$U{row})"
+            ws.cell(row = row, column = col).value = f"=INDEX({dcol(letter)},$V{row})"
         for j, d in enumerate(domains):
             for offset, letters in [(6, ss_letters), (13, pl_letters)]:
-                ref = f"INDEX({dcol(letters[d])},$U{row})"
+                ref = f"INDEX({dcol(letters[d])},$V{row})"
                 ws.cell(row = row, column = offset + j).value = \
                     f'=IFERROR(IF({ref} = 0, "", {ref}), "")'
         prior = f'INDEX({dcol("V")}, MATCH($A{row}&"|"&($E{row}-1), {key},0))'
-        ws.cell(row = row, column = 19).value = f'=IFERROR(IF({prior} = 0, "—", {prior}), "—")'
-        ws.cell(row = row, column = 20).value = f'=IFERROR(INDEX({dcol("W")}, $U{row}), "")'
+        ws.cell(row = row, column = 20).value = f'=IFERROR(IF({prior} = 0, "—", {prior}), "—")'
+        ws.cell(row = row, column = 21).value = f'=IFERROR(INDEX({dcol("W")}, $V{row}), "")'
     last = first + len(roster) - 1
-    _header_cells(ws, 4, 20)
+    _header_cells(ws, 4, 22)
     for row_cells in ws.iter_rows(min_row = first, max_row = last):
         for cell in row_cells:
             cell.font = F(size = 10)
             cell.border = box
     for r in range(first, last + 1):
         ws.cell(row = r, column = 4).number_format = k_format
-        for c in range(13, 20):
+        for c in range(13, 21):
             ws.cell(row = r, column = c).number_format = "0.0"
     ws.freeze_panes = "C5"
-    ws.auto_filter.ref = f"A4:T{last}"
+    ws.auto_filter.ref = f"A4:U{last}"
     for i, w in enumerate([11, 22, 11, 7, 8] + [8] * 14 + [17, 10], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
-    ws.column_dimensions["U"].hidden = True
-    _status_cf(ws, f"A{first}:T{last}", f"$T{first}")
+    ws.column_dimensions["V"].hidden = True
+    _status_cf(ws, f"A{first}:U{last}", f"$U{first}")
+"""
+
+def _sheet_roster(wb, roster, school, key, dcol):
+    ws = wb.create_sheet("Current Roster")
+    ws["A1"] = f"{school} — Current EL Roster (each student's most recent ACCESS test)"
+    ws["A1"].font = F(bold = True, size = 13)
+    ws["A2"] = (
+        "Color Legend: Green = Exited (Composite ≥ 4.8)     "
+        "Yellow = Newly Part-Time (first year Literacy PL ≥ 3.5)    "
+        "Orange = Remained Part-Time (qualified in a prior year)    "
+        "Red = Full-Time / Needs Attention (never reached Literacy 3.5) "
+    )
+    ws["A2"].font = F(italic = True, size = 9)
+    headers = (
+        ["Student ID", "Student Name", "Trend", "Date of Birth", "Grade",
+         "Latest Test Year"]
+        + [f"{d} SS" for d in domains] + [f"{d} PL" for d in domains]
+        + ["Prior-Yr Composite PL", "Status", "MatchRow"]
+    )
+    ws.append([])
+    ws.append(headers)
+    first = 5
+
+    for i, (_, r) in enumerate(roster.iterrows()):
+        row = first + i
+        ws.cell(row = row, column = 1).value = str(r.StudentID)
+        ws.cell(row = row, column = 23).value = (
+            f'=IFERROR(MATCH($A{row}&"|"&_xlfn.MAXIFS({dcol("E")},{dcol("B")},$A{row}),'
+            f'{key},0),"")'
+        )
+        for col, letter in [(2, "C"), (4, "D"), (5, "F"), (6, "E")]:
+            ws.cell(row = row, column = col).value = f"=INDEX({dcol(letter)},$W{row})"
+        for j, d in enumerate(domains):
+            for offset, letters in [(7, ss_letters), (14, pl_letters)]:
+                ref = f"INDEX({dcol(letters[d])},$W{row})"
+                ws.cell(row = row, column = offset + j).value = \
+                    f'=IFERROR(IF({ref} = 0, "", {ref}), "")'
+        prior = f'INDEX({dcol("V")}, MATCH($A{row}&"|"&($F{row}-1), {key},0))'
+        ws.cell(row = row, column = 21).value = f'=IFERROR(IF({prior} = 0, "—", {prior}), "—")'
+        ws.cell(row = row, column = 22).value = f'=IFERROR(INDEX({dcol("W")}, $W{row}), "")'
+        ws.cell(row = row, column = 3).value = (
+            f'=IF(OR($T{row}="",$U{row}="—",$U{row}=""),"",'
+            f'IF($T{row}>$U{row},"▲",IF($T{row}<$U{row},"▼","—")))'
+        )
+    last = first + len(roster) - 1
+    _header_cells(ws, 4, 23)
+    for row_cells in ws.iter_rows(min_row = first, max_row = last):
+        for cell in row_cells:
+            cell.font = F(size = 10)
+            cell.border = box
+    for r in range(first, last + 1):
+        ws.cell(row = r, column = 5).number_format = k_format
+        for c in range(14, 22):
+            ws.cell(row = r, column = c).number_format = "0.0"
+        ws.cell(row = r, column = 3).alignment = Alignment(horizontal = "center")
+    ws.freeze_panes = "D5"
+    ws.auto_filter.ref = f"A4:V{last}"
+    for i, w in enumerate([11, 22, 8, 11, 7, 8] + [8] * 14 + [17, 10], 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.column_dimensions["W"].hidden = True
+
+    for status, color in status_fills.items():
+        ws.conditional_formatting.add(
+            f"B{first}:B{last}",
+            FormulaRule(formula = [f'$V{first}="{status}"'],
+                        fill = PatternFill("solid", start_color = color,
+                                           end_color = color, fill_type = "solid"))
+        )
+        ws.conditional_formatting.add(
+            f"V{first}:V{last}",
+            FormulaRule(formula = [f'$V{first}="{status}"'],
+                        fill = PatternFill("solid", start_color = color,
+                                            end_color = color, fill_type = "solid"))
+        )
+
+    ws.conditional_formatting.add(
+        f"C{first}:C{last}",
+        FormulaRule(formula = [f'$C{first}="▲"'],
+                    font = Font(name = font, color = "008000", bold = True))
+    )
+    ws.conditional_formatting.add(
+        f"C{first}:C{last}",
+        FormulaRule(formula = [f'$C{first}="▼"'],
+                    font = Font(name = font, color = "CC0000", bold = True))
+    )
 
 def _sheet_history(wb, roster, school, years, key, dcol):
     ws = wb.create_sheet("Domain History")
@@ -490,6 +582,8 @@ def _sheet_readme(wb, school, n_students, n_records, years):
         ("", False, 10),
         (f"School in this file: {school}    |   Students: {n_students}  |   ", 
          False, 10),
+        (f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}",
+         False, 10),
         ("", False, 10),
         ("HOW THE SHEET WORKS", True, 11),
         ("• Data (All Years) — the master table: one row per student per test year,"
@@ -537,6 +631,101 @@ def _sheet_readme(wb, school, n_students, n_records, years):
         cell.font = F(bold = bold, size = size)
         cell.alignment = Alignment(wrap_text = True, vertical = "top")
     ws.column_dimensions["A"].width = 130
+
+def _sheet_summary(wb, roster):
+    ws = wb.create_sheet("Summary")
+    ws["A1"] = "Summary — Status Breakdown"
+    ws["A1"].font = F(bold = True, size = 14)
+
+    counts = roster["Status"].value_counts()
+
+    ws["A3"] = "Status"
+    ws["B3"] = "Number of Students"
+    _header_cells(ws, 3, 2)
+    for i, status in enumerate(status_order):
+        row = 4 + i
+        ws.cell(row = row, column = 1).value = status
+        ws.cell(row = row, column = 2).value = int(counts.get(status, 0))
+        color = status_fills.get(status)
+        if color:
+            ws.cell(row = row, column = 1).fill = PatternFill(
+                "solid", start_color = color, end_color = color, fill_type = "solid")
+    total_row = 4 + len(status_order)
+    ws.cell(row = total_row, column = 1).value = "Total"
+    ws.cell(row = total_row, column = 1).font = F(bold = True)
+    ws.cell(row = total_row, column = 2).value = int(counts.sum())
+    ws.cell(row = total_row, column = 2).font = F(bold = True)
+
+    ws.cell(row = 3, column = 4).value = "Grade"
+    for j, status in enumerate(status_order):
+        ws.cell(row = 3, column = 5 + j).value = status
+    _header_cells(ws, 3, 1)          # style "Status by Grade" area is below; header styled next
+    for c in range(4, 4 + 1 + len(status_order)):
+        cell = ws.cell(row = 3, column = c)
+        cell.fill = hdr_fill
+        cell.font = F(bold = True, color = "FFFFFF", size = 10)
+        cell.alignment = Alignment(horizontal = "center", vertical = "center", wrap_text = True)
+
+    table = pd.crosstab(roster["GradeNum"], roster["Status"])
+    table = table.reindex(columns = status_order, fill_value = 0)
+    grades_sorted = sorted(table.index)
+    for i, grade in enumerate(grades_sorted):
+        row = 4 + i
+        label = "K" if grade == 0 else str(int(grade))
+        ws.cell(row = row, column = 4).value = label
+        for j, status in enumerate(status_order):
+            ws.cell(row = row, column = 5 + j).value = int(table.loc[grade, status])
+
+    grade_last = 3 + len(grades_sorted)
+    chart_row = max(total_row, grade_last) + 2
+
+    chart = BarChart()
+    chart.title = "Students by Status"
+    chart.y_axis.title = "Number of Students"
+    chart.x_axis.title = "Status"
+    chart.y_axis.scaling.max = int(counts.max() * 1.05)
+    chart.layout = Layout(
+        manualLayout = ManualLayout(
+            x = 0.01, y = 0.08,
+            w = 0.85, h = 0.85
+        )
+    )
+    data = Reference(ws, min_col = 2, min_row = 3, max_row = 3 + len(status_order))
+    cats = Reference(ws, min_col = 1, min_row = 4, max_row = 3 + len(status_order))
+    chart.add_data(data, titles_from_data = True)
+    chart.set_categories(cats)
+    chart.legend = None
+    from openpyxl.chart.marker import DataPoint
+    series = chart.series[0]
+    for i, status in enumerate(status_order):
+        pt = DataPoint(idx = i)
+        pt.graphicalProperties.solidFill = status_fills.get(status)
+        series.data_points.append(pt)
+    ws.add_chart(chart, f"B{chart_row}")
+
+    pie = PieChart()
+    pie.title = "Status Distribution"
+    pie_data = Reference(ws, min_col = 2, min_row = 3, max_row = 3 + len(status_order))
+    pie_cats = Reference(ws, min_col = 1, min_row = 4, max_row = 3 + len(status_order))
+    pie.add_data(pie_data, titles_from_data = True)
+    pie.set_categories(pie_cats)
+    slice_series = pie.series[0]
+    for i, status in enumerate(status_order):
+        pt = DataPoint(idx = i)
+        pt.graphicalProperties.solidFill = status_fills.get(status)
+        slice_series.data_points.append(pt)
+    pie.dataLabels = DataLabelList()
+    pie.dataLabels.showPercent = True
+    pie.dataLabels.showSerName = False
+    pie.dataLabels.showCatName = False
+    pie.dataLabels.showVal = False
+    pie.dataLabels.showLegendKey = False
+    ws.add_chart(pie, f"K{chart_row}")
+
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 20
+    ws.column_dimensions["C"].width = 4
+    ws.column_dimensions["D"].width = 8
 
 # SECTION 5 — PROCESSING FILE
 

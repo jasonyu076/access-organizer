@@ -11,9 +11,8 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.dimensions import ColumnDimension, RowDimension
 from openpyxl.formatting.rule import FormulaRule, ColorScaleRule
-from openpyxl.chart import BarChart, PieChart, Reference 
+from openpyxl.chart import BarChart, PieChart, LineChart, Reference 
 from openpyxl.chart.label import DataLabelList
 from openpyxl.worksheet.datavalidation import DataValidation
 from datetime import datetime
@@ -556,7 +555,7 @@ def _sheet_lookup(wb, years, list_last, key, dcol, lists_wc):
         ws.cell(row = row, column = 2).value = f'=IFERROR(INDEX({dcol("F")},{m}),"")'
         for di, d in enumerate(domains):
             ref = f"INDEX({dcol(pl_letters[d])}, {m})"
-            ws.cell(row = row, column = 3 + di).value = f'=IFERROR(IF({ref} = 0, "", {ref}), "")'
+            ws.cell(row = row, column = 3 + di).value = f'=IFERROR(IF({ref} = 0, NA(), {ref}), NA())'
         ref = f'INDEX({dcol("N")}, {m})'
         ws.cell(row = row, column = 10).value = f'=IFERROR(IF({ref} = 0, "", {ref}),"")'
         ws.cell(row = row, column = 11).value = f'=IFERROR(INDEX({dcol("W")}, {m}), "")'
@@ -574,6 +573,58 @@ def _sheet_lookup(wb, years, list_last, key, dcol, lists_wc):
     _status_cf(ws, f"K{hrow + 1}:K{tlast}", f"$K{hrow + 1}")
     for i, w in enumerate([8, 7] + [11] * 7 + [12, 18], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
+
+    line = LineChart()
+    line.title = "Composite PL Over Time"
+    line.y_axis.title = "Composite PL"
+    line.x_axis.title = "Year"
+    line.y_axis.scaling.min = 0
+    line.y_axis.scaling.max = 6
+
+    line_data = Reference(ws, min_col = 9, min_row = hrow, max_row = tlast)
+    line_cats = Reference(ws, min_col = 1, min_row = hrow + 1, max_row = tlast)
+    line.add_data(line_data, titles_from_data = True)
+    line.set_categories(line_cats)
+    line.legend = None
+
+    from openpyxl.chart.marker import Marker
+    from openpyxl.drawing.line import LineProperties
+    from openpyxl.chart.shapes import GraphicalProperties
+    from openpyxl.drawing.fill import PatternFillProperties, ColorChoice
+
+    s = line.series[0]
+    s.smooth = False
+
+    light_blue = "6699CC"
+
+    s.graphicalProperties = GraphicalProperties()
+    s.graphicalProperties.line = LineProperties(solidFill = light_blue, w = 20000)
+
+    s.marker = Marker(symbol = "circle", size = 7)
+    s.marker.graphicalProperties = GraphicalProperties()
+    s.marker.graphicalProperties.solidFill = light_blue
+    s.marker.graphicalProperties.line = LineProperties(solidFill = light_blue)
+
+    line.displayBlanksAs = "gap"
+    
+    line.y_axis.majorGridlines = None
+    line.y_axis.delete = False
+    line.x_axis.delete = False
+
+    ws.add_chart(line, "B18")
+
+    line.layout = Layout(
+        manualLayout = ManualLayout(
+            x = 0.01, y = 0.04,
+            w = 0.85, h = 0.68
+        )
+    )
+
+    ws.conditional_formatting.add(
+        f"C{hrow+1}:I{tlast}",
+        FormulaRule(formula = [f'ISNA(C{hrow+1})'],
+                    font = Font(name = font, color = "FFFFFF"))
+    )
 
 def _sheet_readme(wb, school, n_students, n_records, years):
     ws = wb.create_sheet("READ ME", 0)
@@ -687,7 +738,7 @@ def _sheet_summary(wb, roster):
     chart.layout = Layout(
         manualLayout = ManualLayout(
             x = 0.01, y = 0.08,
-            w = 0.85, h = 0.85
+            w = 0.85, h = 0.70
         )
     )
     data = Reference(ws, min_col = 2, min_row = 3, max_row = 3 + len(status_order))
@@ -726,6 +777,13 @@ def _sheet_summary(wb, roster):
     ws.column_dimensions["B"].width = 20
     ws.column_dimensions["C"].width = 4
     ws.column_dimensions["D"].width = 8
+
+    chart.y_axis.majorGridlines = None
+    chart.y_axis.delete = False
+    chart.x_axis.delete = False
+
+    chart.y_axis.scaling.min = 0
+    chart.x_axis.title = None
 
 # SECTION 5 — PROCESSING FILE
 

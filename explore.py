@@ -2,12 +2,13 @@
 # Turns raw Student ACCESS Scores History Report into an organized
 # multi-sheet Excel tracker
 
+import pandas as pd
 import os
 import re
 import sys
 import traceback
+import tkinter as tk
 
-import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -16,7 +17,12 @@ from openpyxl.chart import BarChart, PieChart, LineChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.worksheet.datavalidation import DataValidation
 from datetime import datetime
+from tkinter import filedialog, messagebox
 from openpyxl.chart.layout import Layout, ManualLayout
+from openpyxl.chart.marker import DataPoint
+from openpyxl.chart.marker import Marker
+from openpyxl.drawing.line import LineProperties
+from openpyxl.chart.shapes import GraphicalProperties
 
 # SECTION 1 — CONSTANTS
 
@@ -587,11 +593,6 @@ def _sheet_lookup(wb, years, list_last, key, dcol, lists_wc):
     line.set_categories(line_cats)
     line.legend = None
 
-    from openpyxl.chart.marker import Marker
-    from openpyxl.drawing.line import LineProperties
-    from openpyxl.chart.shapes import GraphicalProperties
-    from openpyxl.drawing.fill import PatternFillProperties, ColorChoice
-
     s = line.series[0]
     s.smooth = False
 
@@ -746,7 +747,6 @@ def _sheet_summary(wb, roster):
     chart.add_data(data, titles_from_data = True)
     chart.set_categories(cats)
     chart.legend = None
-    from openpyxl.chart.marker import DataPoint
     series = chart.series[0]
     for i, status in enumerate(status_order):
         pt = DataPoint(idx = i)
@@ -816,8 +816,6 @@ def process_file(path):
 # SECTION 6 – WINDOW USER SEES
 
 def run_gui():
-    import tkinter as tk
-    from tkinter import filedialog, messagebox
 
     root = tk.Tk()
     root.withdraw()

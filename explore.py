@@ -232,6 +232,10 @@ ss_letters = {
     "Composite" : "N"
 }
 
+def _maxifs(max_range, *pairs):
+    terms = "".join(f"({rng}{op}{crit})*" for rng, op, crit in pairs)
+    return f"SUMPRODUCT(MAX({terms}{max_range}))"
+
 def build_workbook(df, school, out_path):
     years = sorted(df["Year"].unique())
     latest = df.loc[df.groupby("StudentID")["Year"].idxmax()]
@@ -303,14 +307,20 @@ def _sheet_data(wb, df, data_last):
         values += [r[c] if pd.notna(r[c]) else None for c in pl]
         ws.append(values)
 
+        sid_rng = f"$B$2:$B${data_last}"
+        yr_rng = f"$E$2:$E${data_last}"
+        comp = _maxifs(f"$V$2:$V${data_last}",
+                       (sid_rng, "=", f"$B{row}"), (yr_rng, "<=", f"$E{row}"))
+        lit_incl = _maxifs(f"$U$2:$U${data_last}",
+                           (sid_rng, "=", f"$B{row}"), (yr_rng, "<=", f"$E{row}"))
+        lit_prior = _maxifs(f"$U$2:$U${data_last}",
+                            (sid_rng, "=", f"$B{row}"), (yr_rng, "<", f"$E{row}"))
         ws.cell(row = row, column = 23).value = (
-            f'=IF(_xlfn.MAXIFS($V$2:$V${data_last},$B$2:$B${data_last},$B{row},'
-            f'$E$2:$E${data_last},"<="&$E{row}) >= {composite_exit_cutoff},"Exited",'
-            f'IF(_xlfn.MAXIFS($U$2:$U${data_last},$B$2:$B${data_last},$B{row},'
-            f'$E$2:$E${data_last},"<="&$E{row}) >= {literacy_part_time_cutoff},'
-            f'IF(_xlfn.MAXIFS($U$2:$U${data_last},$B$2:$B${data_last},$B{row},'
-            f'$E$2:$E${data_last},"<"&$E{row}) >= {literacy_part_time_cutoff},'
+            f'=IF({comp} >= {composite_exit_cutoff},"Exited",'
+            f'IF({lit_incl} >= {literacy_part_time_cutoff},'
+            f'IF({lit_prior} >= {literacy_part_time_cutoff},'
             f'"Remained Part-Time","Newly Part-Time"),"Full-Time"))')
+            
         ws.cell(row = row, column = 24).value = f'=$B{row}&"|"&$E{row}'
 
     _header_cells(ws, 1, 24)
@@ -408,10 +418,12 @@ def _sheet_roster(wb, roster, school, key, dcol):
     for i, (_, r) in enumerate(roster.iterrows()):
         row = first + i
         ws.cell(row = row, column = 1).value = str(r.StudentID)
+
+        latest_yr = _maxifs(dcol("E"), (dcol("B"), "=", f"$A{row}"))
         ws.cell(row = row, column = 23).value = (
-            f'=IFERROR(MATCH($A{row}&"|"&_xlfn.MAXIFS({dcol("E")},{dcol("B")},$A{row}),'
-            f'{key},0),"")'
+            f'=IFERROR(MATCH($A{row}&"|"&{latest_yr},{key},0),"")'
         )
+        
         for col, letter in [(2, "C"), (4, "D"), (5, "F"), (6, "E")]:
             ws.cell(row = row, column = col).value = f"=INDEX({dcol(letter)},$W{row})"
         for j, d in enumerate(domains):
@@ -491,10 +503,12 @@ def _sheet_history(wb, roster, school, years, key, dcol):
         row = first + i
         ws.cell(row = row, column = 1).value = str(r.StudentID)
         ws.cell(row = row, column = 2).value = r.Name
-        ws.cell(row = row, column = 3).value = (
-            f'=IFERROR(INDEX({dcol("W")}, MATCH($A{row}&"|"&'
-            f'_xlfn.MAXIFS({dcol("E")}, {dcol("B")}, $A{row}), {key}, 0)), "")'
+
+        latest_yr = _maxifs(dcol("E"), (dcol("B"), "=", f"$A{row}"))
+        ws.cell(row = row, column = 23).value = (
+            f'=IFERROR(MATCH($A{row}&"|"&{latest_yr},{key},0),"")'
         )
+
         for di, d in enumerate(domains):
             for yi, y in enumerate(years):
                 ref = f'INDEX({dcol(pl_letters[d])}, MATCH($A{row}&"|"&{y}, {key}, 0))'
@@ -822,7 +836,7 @@ def run_gui():
 
     paths = filedialog.askopenfilenames(
         title = "Select one or more raw ACCESS export files",
-        filetypes = [("Excel files", "*.xlt *.xls *.xlsx"), ("All files", "*.*")])
+        filetypes = [("Excel files", "* *.xls *.xlsx"), ("All files", "*.*")])
     if not paths:
         return
     

@@ -30,7 +30,7 @@ jobs:
 
     - name: Build with PyInstaller
       run: |
-        pyinstaller --windowed --onefile access_organizer.py
+        pyinstaller --windowed --onefile explore.py
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
